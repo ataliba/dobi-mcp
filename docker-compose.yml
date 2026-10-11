@@ -1,0 +1,22 @@
+# Exemplo. Segredos (MCP_ENDPOINT, FERIADOS_API_KEY, FERIADOS_UF) ficam no .env
+# ou no Infisical (USE_INFISICAL=1).
+services:
+  dobi-mcp:
+    build:
+      context: .
+      args:
+        INSTALL_INFISICAL: ${USE_INFISICAL:-0}  # só instala o CLI se for usar
+    image: dobi-mcp
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      # Só estes módulos são importados (sobrepõe config.yaml). Vale para as
+      # oficiais (tools/, dentro da imagem) e as personalizadas (custom_tools/).
+      ENABLED_TOOLS: calculo,tempo,sistema,feriados
+      # Infisical: 1 = segredos vêm do Infisical; 0/ausente = só .env.
+      # Com 1, defina no .env: INFISICAL_TOKEN (machine identity) e INFISICAL_PROJECT_ID.
+      USE_INFISICAL: ${USE_INFISICAL:-0}
+      INFISICAL_ENV: ${INFISICAL_ENV:-prod}
+    volumes:
+      # Tools personalizadas. As oficiais vêm na imagem: não monte ./tools por cima.
+      - ./custom_tools:/app/custom_tools:ro

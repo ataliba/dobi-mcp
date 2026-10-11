@@ -1,0 +1,9 @@
+# Tools ativas quando ENABLED_TOOLS (env) não está definida.
+# Cada nome = um arquivo tools/<nome>.py (oficial) ou custom_tools/<nome>.py
+# (personalizada) com register(mcp). Fora da lista = não importado.
+# Mesmo nome nas duas pastas → vale a oficial.
+enabled_tools:
+  - calculo
+  - tempo
+  - sistema
+  - feriados
