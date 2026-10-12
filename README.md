@@ -75,7 +75,7 @@ ao robô "quanto é 2 elevado a 10?" ou "como está o servidor?".
 Só as variáveis definidas viram flags (`--env`, `--projectId`, `--path`, `--domain`). No boot sai
 `segredos via Infisical (env=..., sessão Universal Auth)` em stderr.
 
-**Sessão Universal Auth** (mesmo modelo do velhodorio): com client-id/secret no ambiente, o
+**Sessão Universal Auth**: com client-id/secret no ambiente, o
 `pipe.py` roda `infisical login --method=universal-auth --silent --plain` a cada boot, pega o
 token de acesso de curta duração e só então faz `infisical run` com ele. Nada de token fixo
 vencendo no `.env`: reiniciou, sessão nova. Client-id/secret chegam ao CLI pelo ambiente (não

@@ -29,4 +29,3 @@ venv/
 
 # Tools personalizadas: diretório só local (cada servidor monta o seu)
 /custom_tools/
-tests/test_neuroaion.py
