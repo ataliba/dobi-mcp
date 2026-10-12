@@ -77,7 +77,7 @@ Success = log line `conectado em wss://api.xiaozhi.me/mcp/?token=***`. Then ask 
 Only the variables that are set become flags (`--env`, `--projectId`, `--path`, `--domain`).
 At boot, `segredos via Infisical (env=..., sessão Universal Auth)` is logged to stderr.
 
-**Universal Auth session**: with client-id/secret in the environment, `pipe.py` runs
+**Universal Auth session** (same approach as [velhodorio](#origins)): with client-id/secret in the environment, `pipe.py` runs
 `infisical login --method=universal-auth --silent --plain` on every boot, takes the short-lived
 access token and only then runs `infisical run` with it. No static token expiring in `.env`:
 restart, new session. Client-id/secret reach the CLI through the environment (not as arguments,
@@ -230,3 +230,13 @@ No network needed: includes an end-to-end test with a fake WebSocket on 127.0.0.
 - A plugin is Python code with the same privileges as the server: review it before enabling.
 - Always log to stderr; stdout is reserved for the MCP protocol.
 - `mcp<2` pinned: SDK 2.x renamed `FastMCP` to `MCPServer`.
+
+## Origins
+
+Velhodorio and Neuroaion, mentioned in this repository and in the commit history, are tools of
+mine that I use day to day:
+
+- **velhodorio**: my personal multi-agent assistant. It was the base for some features here,
+  such as the Infisical Universal Auth login with a session token on every boot (`pipe.py`).
+- **Neuroaion**: my task and energy system, which exposes an MCP server. I use it with dobi as a
+  local custom tool (`custom_tools/`), which is why it is not in this repository.
