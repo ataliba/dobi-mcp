@@ -1,5 +1,7 @@
 # dobi-mcp
 
+**Português** | [English](README.en.md)
+
 MCP mínimo para agentes **XiaoZhi** (ex.: robô Dobi). Expõe tools somente leitura
 e conecta na nuvem XiaoZhi por WebSocket de **saída** — nenhuma porta aberta no seu lado.
 
@@ -158,8 +160,8 @@ tools ativas (3): calculo, tempo, custom/minha_tool | ignoradas: '../x' (nome in
 ## Criando uma tool
 
 Oficial em `tools/<nome>.py`, personalizada em `custom_tools/<nome>.py` (sem
-`__init__.py`; o mesmo formato vale para as duas). O arquivo exporta `register(mcp) -> None` e registre as tools com
-`@mcp.tool()` **dentro** dela (o `mcp` chega por parâmetro; nunca importe um global):
+`__init__.py`; o mesmo formato vale para as duas). O arquivo exporta `register(mcp) -> None`
+e registra as tools com `@mcp.tool()` **dentro** dela (o `mcp` chega por parâmetro; nunca importe um global):
 
 ```python
 # tools/exemplo.py
@@ -219,8 +221,8 @@ Sem rede: inclui um teste de ponta a ponta com WebSocket fake em 127.0.0.1
 - Com Infisical, o `.env` guarda só client-id/secret da machine identity + `INFISICAL_PROJECT_ID`:
   eles dão acesso a todos os segredos do ambiente, então dê à identity permissão só de leitura
   e só no ambiente/pasta necessários. O secret não chega ao processo das tools.
-- Só roda código de `tools/`/`custom_tools/` que você habilitou por nome; nomes são validados
-  por regex antes do import (sem path traversal). Personalizada nunca substitui oficial de
+- Só roda código das oficiais habilitadas por nome e do que você colocou em `custom_tools/`;
+  nomes são validados por regex antes do import (sem path traversal). Personalizada nunca substitui oficial de
   mesmo nome. Em container, `custom_tools/` é montado `:ro` e o processo roda como non-root
   (uid 10001).
 - Plugin é código Python com os mesmos privilégios do servidor: revise antes de habilitar.
