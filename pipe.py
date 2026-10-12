@@ -6,12 +6,15 @@ Uso:  MCP_ENDPOINT='wss://api.xiaozhi.me/mcp/?token=...' python pipe.py server.p
 - Reconecta com backoff exponencial + jitter.
 - O token nunca vai para o log.
 - USE_INFISICAL=1 -> reexecuta sob `infisical run` (segredos injetados no ambiente).
+  Com INFISICAL_UNIVERSAL_AUTH_CLIENT_ID/SECRET (machine identity), faz antes o login
+  Universal Auth e usa o token de sessão gerado a cada boot (não vence parado no .env).
 """
 import asyncio
 import logging
 import os
 import random
 import shutil
+import subprocess
 import sys
 
 import websockets
@@ -23,22 +26,54 @@ BACKOFF_INICIAL, BACKOFF_MAX = 1, 60
 VERDADEIRO = {"1", "true", "yes", "on", "sim"}
 # Marca que já estamos dentro do `infisical run` (evita reexecutar em loop)
 SENTINELA = "DOBI_SOB_INFISICAL"
+UA_ID, UA_SECRET = "INFISICAL_UNIVERSAL_AUTH_CLIENT_ID", "INFISICAL_UNIVERSAL_AUTH_CLIENT_SECRET"
+
+
+class ErroInfisical(RuntimeError):
+    """Falha no login Universal Auth (mensagem já segura para log)."""
 
 
 def comando_infisical(env: dict, argv: list[str]) -> list[str] | None:
     """Comando para reexecutar sob `infisical run`, ou None se não for o caso.
 
     Opcionais: INFISICAL_ENV (dev/staging/prod), INFISICAL_PROJECT_ID (obrigatório com
-    INFISICAL_TOKEN de machine identity), INFISICAL_PATH. Sem eles, vale o .infisical.json.
+    machine identity), INFISICAL_PATH, INFISICAL_API_URL (instância própria -> --domain).
+    Sem eles, vale o .infisical.json.
     """
     if env.get("USE_INFISICAL", "").strip().lower() not in VERDADEIRO or env.get(SENTINELA):
         return None
     cmd = ["infisical", "run", "--silent"]
     for var, flag in (("INFISICAL_ENV", "--env"), ("INFISICAL_PROJECT_ID", "--projectId"),
-                      ("INFISICAL_PATH", "--path")):
+                      ("INFISICAL_PATH", "--path"), ("INFISICAL_API_URL", "--domain")):
         if env.get(var):
             cmd.append(f"{flag}={env[var]}")
     return [*cmd, "--", sys.executable, *argv]
+
+
+def usa_universal_auth(env: dict) -> bool:
+    return bool(env.get(UA_ID, "").strip() and env.get(UA_SECRET, "").strip())
+
+
+def comando_login(env: dict) -> list[str]:
+    """`infisical login` Universal Auth. Client-id/secret vão pelo ambiente (o CLI lê
+    INFISICAL_UNIVERSAL_AUTH_CLIENT_*), nunca por argumento: não aparecem no `ps`."""
+    cmd = ["infisical", "login", "--method=universal-auth", "--silent", "--plain"]
+    if env.get("INFISICAL_API_URL"):
+        cmd.append(f"--domain={env['INFISICAL_API_URL']}")
+    return cmd
+
+
+def token_de_sessao(env: dict, executar=subprocess.run) -> str:
+    """Troca client-id/secret por um token de acesso de curta duração."""
+    try:
+        r = executar(comando_login(env), env=env, capture_output=True, text=True, timeout=60)
+    except (OSError, subprocess.TimeoutExpired) as e:
+        raise ErroInfisical(f"login Universal Auth falhou: {type(e).__name__}") from None
+    token = (r.stdout or "").strip().splitlines()[-1:] if r.returncode == 0 else []
+    if not token or not token[0].strip():
+        detalhe = (r.stderr or "").strip().replace(env.get(UA_SECRET, "") or "\0", "***")
+        raise ErroInfisical(f"login Universal Auth falhou (código {r.returncode}): {detalhe[-300:]}")
+    return token[0].strip()
 
 
 def mascarar(url: str) -> str:
@@ -90,9 +125,19 @@ def talvez_infisical() -> None:
         return
     if not shutil.which("infisical"):
         sys.exit("USE_INFISICAL ativo, mas o CLI `infisical` não está no PATH")
-    log.info("segredos via Infisical (env=%s)", os.environ.get("INFISICAL_ENV") or "padrão")
-    os.environ[SENTINELA] = "1"
-    os.execvp(cmd[0], cmd)  # não retorna
+    env = dict(os.environ)
+    auth = "token do ambiente"
+    if usa_universal_auth(env):
+        try:
+            env["INFISICAL_TOKEN"] = token_de_sessao(env)
+        except ErroInfisical as e:
+            sys.exit(str(e))
+        auth = "sessão Universal Auth"
+    # credencial longa não desce para o servidor/tools: só o token de sessão segue
+    env.pop(UA_SECRET, None)
+    env[SENTINELA] = "1"
+    log.info("segredos via Infisical (env=%s, %s)", env.get("INFISICAL_ENV") or "padrão", auth)
+    os.execvpe(cmd[0], cmd, env)  # não retorna
 
 
 async def main() -> None:

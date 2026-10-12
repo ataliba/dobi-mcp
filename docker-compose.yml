@@ -2,10 +2,7 @@
 # ou no Infisical (USE_INFISICAL=1).
 services:
   dobi-mcp:
-    build:
-      context: .
-      args:
-        INSTALL_INFISICAL: ${USE_INFISICAL:-0}  # só instala o CLI se for usar
+    build: .  # imagem já traz o CLI do Infisical; uso ligado por USE_INFISICAL
     image: dobi-mcp
     restart: unless-stopped
     env_file: .env
@@ -14,7 +11,8 @@ services:
       # oficiais (tools/, dentro da imagem) e as personalizadas (custom_tools/).
       ENABLED_TOOLS: calculo,tempo,sistema,feriados
       # Infisical: 1 = segredos vêm do Infisical; 0/ausente = só .env.
-      # Com 1, defina no .env: INFISICAL_TOKEN (machine identity) e INFISICAL_PROJECT_ID.
+      # Com 1, defina no .env: INFISICAL_UNIVERSAL_AUTH_CLIENT_ID/SECRET (machine identity),
+      # INFISICAL_PROJECT_ID e, se instância própria, INFISICAL_API_URL.
       USE_INFISICAL: ${USE_INFISICAL:-0}
       INFISICAL_ENV: ${INFISICAL_ENV:-prod}
     volumes:

@@ -61,13 +61,23 @@ ao robô "quanto é 2 elevado a 10?" ou "como está o servidor?".
 | Variável | Uso |
 |---|---|
 | `USE_INFISICAL` | Liga/desliga |
-| `INFISICAL_ENV` | Ambiente (`dev`, `staging`, `prod`); ausente = padrão do CLI/`.infisical.json` |
+| `INFISICAL_ENV` | Ambiente (`dev`, `staging`, `prod`); ausente = padrão do CLI (`dev`!) |
 | `INFISICAL_PROJECT_ID` | ID do projeto; obrigatória sem `.infisical.json` (ex.: container) |
 | `INFISICAL_PATH` | Pasta de segredos no projeto (padrão `/`) |
-| `INFISICAL_TOKEN` | Token de machine identity (container/CI); lido direto pelo CLI |
+| `INFISICAL_API_URL` | Instância própria; vira `--domain` no login e no run |
+| `INFISICAL_UNIVERSAL_AUTH_CLIENT_ID` / `_SECRET` | Machine identity (container/CI) — recomendado |
+| `INFISICAL_TOKEN` | Token fixo (legado); ignorado quando há client-id/secret |
 
-Só as variáveis definidas viram flags (`--env`, `--projectId`, `--path`). No boot sai
-`segredos via Infisical (env=...)` em stderr.
+Só as variáveis definidas viram flags (`--env`, `--projectId`, `--path`, `--domain`). No boot sai
+`segredos via Infisical (env=..., sessão Universal Auth)` em stderr.
+
+**Sessão Universal Auth** (mesmo modelo do velhodorio): com client-id/secret no ambiente, o
+`pipe.py` roda `infisical login --method=universal-auth --silent --plain` a cada boot, pega o
+token de acesso de curta duração e só então faz `infisical run` com ele. Nada de token fixo
+vencendo no `.env`: reiniciou, sessão nova. Client-id/secret chegam ao CLI pelo ambiente (não
+por argumento, então não aparecem no `ps`) e o secret é removido do ambiente antes de subir o
+servidor e as tools. Login falhou → o container sai com o erro do CLI (secret mascarado) e o
+`restart: unless-stopped` tenta de novo.
 
 **Local** (CLI instalado, login de usuário):
 
@@ -77,20 +87,23 @@ infisical init                              # uma vez; gera .infisical.json
 USE_INFISICAL=1 INFISICAL_ENV=dev python pipe.py server.py
 ```
 
-**Container** (machine identity): o CLI só entra na imagem com o build arg
-`INSTALL_INFISICAL=1`; sem ele a imagem fica igual à padrão. No `.env`, só o necessário
+**Container** (machine identity): o CLI do Infisical já vem na imagem; só o uso é opcional
+(`USE_INFISICAL`). Crie uma machine identity com
+Universal Auth (só leitura, só no ambiente/pasta necessários) e no `.env` coloque só o necessário
 para autenticar:
 
 ```bash
 # .env
-INFISICAL_TOKEN=...
+INFISICAL_UNIVERSAL_AUTH_CLIENT_ID=...
+INFISICAL_UNIVERSAL_AUTH_CLIENT_SECRET=...
 INFISICAL_PROJECT_ID=...
+INFISICAL_API_URL=https://infisical.exemplo.com   # se instância própria
 ```
 
 ```bash
-USE_INFISICAL=1 docker compose up -d --build   # compose repassa USE_INFISICAL ao build arg
+USE_INFISICAL=1 docker compose up -d --build
 # ou, sem compose:
-docker build --build-arg INSTALL_INFISICAL=1 -t dobi-mcp .
+docker build -t dobi-mcp .
 docker run -d --name dobi-mcp --restart unless-stopped --env-file .env \
   -e USE_INFISICAL=1 -e INFISICAL_ENV=prod \
   -e ENABLED_TOOLS=calculo,tempo,sistema,feriados \
@@ -102,9 +115,13 @@ No compose, `INFISICAL_ENV` padrão é `prod`.
 Erros comuns:
 
 - ``USE_INFISICAL ativo, mas o CLI `infisical` não está no PATH`` → instale o CLI
-  (ou rebuild com `INSTALL_INFISICAL=1`), ou desligue com `USE_INFISICAL=0`.
+  (na imagem ele já vem), ou desligue com `USE_INFISICAL=0`.
 - `Please either run infisical init ... or pass in project id with --projectId flag` →
   rode `infisical init` ou defina `INFISICAL_PROJECT_ID`.
+- `login Universal Auth falhou (código 1): ...` → client-id/secret errados, identity sem
+  Universal Auth ou `INFISICAL_API_URL` apontando para a instância errada.
+- Sobe mas faltam segredos → `INFISICAL_ENV` ausente cai em `dev`; a identity precisa de
+  permissão no ambiente onde os segredos estão (geralmente `prod`).
 
 ## Ativando tools
 
@@ -186,9 +203,9 @@ Sem rede: inclui um teste de ponta a ponta com WebSocket fake em 127.0.0.1
 
 - A URL do endpoint é credencial: quem a tem injeta tools no seu agente. Vazou → gere outra no console.
 - O pipe mascara o token nos logs.
-- Com Infisical, o `.env` guarda só `INFISICAL_TOKEN` + `INFISICAL_PROJECT_ID`: o token
-  dá acesso a todos os segredos do ambiente, então use machine identity com permissão
-  só de leitura e só no ambiente/pasta necessários.
+- Com Infisical, o `.env` guarda só client-id/secret da machine identity + `INFISICAL_PROJECT_ID`:
+  eles dão acesso a todos os segredos do ambiente, então dê à identity permissão só de leitura
+  e só no ambiente/pasta necessários. O secret não chega ao processo das tools.
 - Só roda código de `tools/`/`custom_tools/` que você habilitou por nome; nomes são validados
   por regex antes do import (sem path traversal). Personalizada nunca substitui oficial de
   mesmo nome. Em container, `custom_tools/` é montado `:ro` e o processo roda como non-root
