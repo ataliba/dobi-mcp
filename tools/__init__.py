@@ -5,10 +5,10 @@ Duas origens:
 - personalizadas: diretório `CUSTOM_TOOLS_DIR` (padrão `custom_tools/`, montado
   como volume), exposto como pacote `custom_tools` sem precisar de `__init__.py`.
 
-Só são importados os módulos habilitados explicitamente em `ENABLED_TOOLS`
-(env, separado por vírgula) ou, se ausente, em `config.yaml` (`enabled_tools`).
-Mesmo nome nas duas origens → vale a oficial. Módulos começando com `_` são
-internos (helpers) e nunca são carregados como plugin.
+Oficiais: só sobem as habilitadas em `ENABLED_TOOLS` (env, separado por vírgula)
+ou, se ausente, em `config.yaml` (`enabled_tools`). Personalizadas: sobem todas as
+do diretório (estar lá = estar ativa). Personalizada com nome de oficial é ignorada.
+Módulos começando com `_` são internos (helpers) e nunca são carregados como plugin.
 """
 import importlib
 import logging
@@ -95,19 +95,21 @@ class _Registrador:
 
 def carregar(mcp: FastMCP, nomes: list[str] | None = None, pacote: str = __name__,
              custom: Path | None = None, pacote_custom: str = "custom_tools") -> dict:
-    """Importa só os plugins habilitados e chama `register(mcp)` de cada um.
+    """Importa os plugins ativos e chama `register(mcp)` de cada um.
 
-    Procura cada nome primeiro nas oficiais (`pacote`) e depois em `custom`
-    (diretório opcional; inexistente = sem personalizadas). Plugin quebrado é
+    Oficiais (`pacote`): só as de `nomes`. Personalizadas (diretório `custom`,
+    opcional; inexistente = nenhuma): todas as do diretório. Plugin quebrado é
     logado e ignorado; colisão de nomes de tool levanta ColisaoDeTools.
     Retorna {"ativas": {plugin: [tools]}, "ignoradas": {nome: motivo}};
     plugins personalizados aparecem como "custom/<nome>".
     """
     if nomes is None:
         nomes = nomes_habilitados()
-    origens = [(pacote, Path(importlib.import_module(pacote).__path__[0]), "")]
+    oficiais = Path(importlib.import_module(pacote).__path__[0])
+    personalizadas: list[str] = []
     if custom is not None and custom.is_dir():
-        origens.append((_expor_pacote(custom, pacote_custom), custom, "custom/"))
+        pacote_custom = _expor_pacote(custom, pacote_custom)
+        personalizadas = sorted(a.stem for a in custom.glob("*.py") if not a.stem.startswith("_"))
     elif custom is not None:
         log.info("sem tools personalizadas: %s não existe", custom)
     donos: dict[str, str] = {}  # nome da tool -> plugin que a registrou
@@ -118,18 +120,23 @@ def carregar(mcp: FastMCP, nomes: list[str] | None = None, pacote: str = __name_
         ignoradas[nome] = motivo
         log.warning("tool %s ignorada: %s", nome, motivo)
 
+    plano: list[tuple[str, str, str]] = []  # (pacote, módulo, rótulo)
     for nome in nomes:
         if not NOME_VALIDO.match(nome):
             ignorar(repr(nome[:40]), "nome inválido")
-            continue
-        achadas = [o for o in origens if (o[1] / f"{nome}.py").is_file()]
-        if not achadas:
+        elif (oficiais / f"{nome}.py").is_file():
+            plano.append((pacote, nome, nome))
+        elif nome not in personalizadas:  # personalizada listada: sobe abaixo de qualquer jeito
             ignorar(nome, "arquivo ausente")
-            continue
-        pkg, _, prefixo = achadas[0]
-        rotulo = prefixo + nome
-        for _, _, outro in achadas[1:]:
-            ignorar(outro + nome, "mesmo nome de uma tool oficial")
+    for nome in personalizadas:
+        if not NOME_VALIDO.match(nome):
+            ignorar(f"custom/{nome[:40]!r}", "nome inválido")
+        elif (oficiais / f"{nome}.py").is_file():
+            ignorar(f"custom/{nome}", "mesmo nome de uma tool oficial")
+        else:
+            plano.append((pacote_custom, nome, f"custom/{nome}"))
+
+    for pkg, nome, rotulo in plano:
         try:
             modulo = importlib.import_module(f"{pkg}.{nome}")
         except Exception as e:  # noqa: BLE001
@@ -155,10 +162,9 @@ def carregar(mcp: FastMCP, nomes: list[str] | None = None, pacote: str = __name_
         ativas[rotulo] = [t for t, _, _ in reg.pendentes]
         log.info("%s/%s.py carregado: %s", pkg, nome, ", ".join(ativas[rotulo]) or "-")
 
-    for _, diretorio, prefixo in origens:
-        for arq in sorted(diretorio.glob("*.py")):
-            if not arq.stem.startswith("_") and arq.stem not in nomes:
-                ignoradas[prefixo + arq.stem] = "não habilitada"
+    for arq in sorted(oficiais.glob("*.py")):
+        if not arq.stem.startswith("_") and arq.stem not in nomes:
+            ignoradas[arq.stem] = "não habilitada"
 
     log.info("tools ativas (%d): %s | ignoradas: %s", len(ativas), ", ".join(ativas) or "-",
              ", ".join(f"{n} ({m})" for n, m in ignoradas.items()) or "-")

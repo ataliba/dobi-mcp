@@ -17,6 +17,8 @@ Nuvem XiaoZhi (wss) <──> pipe.py (ponte) <──stdio──> server.py (Fast
 | `proximos_feriados` | Próximos feriados nacionais/estaduais ([feriadosapi.com](https://feriadosapi.com)) |
 | `dia_util_bancario` | Se a data é dia útil bancário e o próximo dia útil |
 
+Personalizadas: o que estiver em `custom_tools/` (local, fora do git; veja abaixo).
+
 ## Rodando
 
 1. Pegue o endpoint: xiaozhi.me/console/agents → Configurar função → **MCP Endpoint** (canto inferior direito).
@@ -132,21 +134,25 @@ Duas origens de tools:
 | Oficial | `tools/` | Dentro da imagem (versionada com o projeto) |
 | Personalizada | `CUSTOM_TOOLS_DIR` (padrão `custom_tools/`; container: `/app/custom_tools`) | Volume montado por você |
 
-Nenhuma tool sobe só por existir nessas pastas: a ativação é explícita e a mesma lista vale
-para as duas.
+- **Oficiais:** nenhuma sobe só por existir em `tools/`; a ativação é explícita (abaixo).
+- **Personalizadas:** estar no diretório = estar ativa. Para desligar, tire o arquivo (ou
+  renomeie para começar com `_`).
+
+Oficiais ativas:
 
 1. `ENABLED_TOOLS` (env, separado por vírgula), ex.: `ENABLED_TOOLS=calculo,tempo`;
 2. se ausente ou vazia, `config.yaml` → chave `enabled_tools`.
 
-Arquivo fora da lista **não é importado**. Nome na lista sem arquivo → warning, sem crash.
-Mesmo nome nas duas pastas → vale a **oficial** e a personalizada é ignorada (com warning).
-Pasta de personalizadas inexistente → só as oficiais sobem.
+Oficial fora da lista **não é importada**. Nome na lista sem arquivo → warning, sem crash.
+Personalizada com nome de uma oficial → ignorada com warning, mesmo que a oficial esteja
+desligada (personalizada nunca se passa por oficial). Pasta de personalizadas inexistente →
+só as oficiais sobem.
 Nomes precisam casar com `^[a-z][a-z0-9_]*$` (bloqueia `../algo`; helpers com `_` nunca carregam).
 
 No boot sai uma linha de inventário em stderr:
 
 ```
-tools ativas (3): calculo, tempo, custom/eco | ignoradas: '../x' (nome inválido), feriados (não habilitada)
+tools ativas (3): calculo, tempo, custom/minha_tool | ignoradas: '../x' (nome inválido), feriados (não habilitada)
 ```
 
 ## Criando uma tool
@@ -167,8 +173,15 @@ def register(mcp: FastMCP) -> None:
         return {"ok": True, "eco": x[:100]}
 ```
 
-Depois adicione `exemplo` em `ENABLED_TOOLS` ou em `config.yaml` e reinicie.
-`custom_tools/eco.py` é um exemplo pronto de personalizada (habilite com `eco`).
+Oficial: adicione `exemplo` em `ENABLED_TOOLS` ou em `config.yaml` e reinicie.
+Personalizada: basta o arquivo estar em `custom_tools/` e reiniciar.
+Exemplo comentado (tool `eco`) em `exemplos/custom_tools/exemplo.py`; para testar:
+`cp exemplos/custom_tools/exemplo.py custom_tools/` e reinicie.
+
+`custom_tools/` é só local: está no `.gitignore` e no `.dockerignore`, então não vai para o
+repositório nem para a imagem; cada servidor monta o seu como volume. Tudo nele é tratado
+como tool personalizada. Segredo de tool personalizada vem do ambiente (`.env` ou
+Infisical), nunca do arquivo.
 
 Personalizadas podem importar helpers próprios (`custom_tools/_util.py` →
 `from custom_tools._util import ...`) e os oficiais (`from tools._comum import TZ`).

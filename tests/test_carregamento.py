@@ -131,7 +131,8 @@ def test_env_tem_precedencia_sobre_config(tmp_path):
 
 def test_tools_nao_usam_eval_exec():
     proibido = re.compile(r"(?<![\w.])(eval|exec)\s*\(")
-    arquivos = [*(tools.RAIZ / "tools").glob("*.py"), *(tools.RAIZ / "custom_tools").glob("*.py")]
+    arquivos = [*(tools.RAIZ / "tools").glob("*.py"), *(tools.RAIZ / "custom_tools").glob("*.py"),
+                *(tools.RAIZ / "exemplos").rglob("*.py")]
     for arq in arquivos:
         assert not proibido.search(arq.read_text()), arq.name
 
@@ -153,17 +154,38 @@ def custom(tmp_path):
         del sys.modules[mod]
 
 
-def test_custom_carrega_sem_init(pacote, custom):
+def test_custom_carrega_so_por_estar_no_diretorio(pacote, custom):
     pacote("oficial", PLUGIN_OK.format(tool="tool_oficial"))
+    pacote("desligada", PLUGIN_OK.format(tool="tool_desligada"))
     custom("minha", PLUGIN_OK.format(tool="tool_minha"))
-    custom("_helper", "VALOR = 42\n")
     custom("outra", PLUGIN_OK.format(tool="tool_outra"))
+    custom("_helper", "raise RuntimeError('helper não é plugin')\n")
     mcp = FastMCP("t")
-    inv = carregar(mcp, ["oficial", "minha"], pacote=pacote.nome,
+    inv = carregar(mcp, ["oficial"], pacote=pacote.nome,
                    custom=custom.dir, pacote_custom=custom.nome)
-    assert nomes_tools(mcp) == {"tool_oficial", "tool_minha"}
-    assert inv["ativas"] == {"oficial": ["tool_oficial"], "custom/minha": ["tool_minha"]}
-    assert inv["ignoradas"] == {"custom/outra": "não habilitada"}
+    assert nomes_tools(mcp) == {"tool_oficial", "tool_minha", "tool_outra"}
+    assert inv["ativas"] == {"oficial": ["tool_oficial"], "custom/minha": ["tool_minha"],
+                             "custom/outra": ["tool_outra"]}
+    assert inv["ignoradas"] == {"desligada": "não habilitada"}
+
+
+def test_custom_listada_em_enabled_nao_duplica_nem_avisa(pacote, custom):
+    custom("minha", PLUGIN_OK.format(tool="tool_minha"))
+    mcp = FastMCP("t")
+    inv = carregar(mcp, ["minha"], pacote=pacote.nome,
+                   custom=custom.dir, pacote_custom=custom.nome)
+    assert nomes_tools(mcp) == {"tool_minha"}
+    assert inv["ignoradas"] == {}
+
+
+def test_custom_com_nome_invalido_ignorada(pacote, custom):
+    custom("Maiuscula", PLUGIN_OK.format(tool="tool_x"))
+    custom("com-hifen", PLUGIN_OK.format(tool="tool_y"))
+    mcp = FastMCP("t")
+    inv = carregar(mcp, [], pacote=pacote.nome, custom=custom.dir, pacote_custom=custom.nome)
+    assert nomes_tools(mcp) == set()
+    assert inv["ignoradas"] == {"custom/'Maiuscula'": "nome inválido",
+                                "custom/'com-hifen'": "nome inválido"}
 
 
 def test_custom_importa_helper_proprio_e_oficial(pacote, custom):
@@ -179,17 +201,19 @@ def test_custom_importa_helper_proprio_e_oficial(pacote, custom):
                 return {{"p": PREFIXO, "tz": str(TZ)}}
     """.replace("{pkg}", custom.nome))
     mcp = FastMCP("t")
-    carregar(mcp, ["usa"], pacote=pacote.nome, custom=custom.dir, pacote_custom=custom.nome)
+    carregar(mcp, [], pacote=pacote.nome, custom=custom.dir, pacote_custom=custom.nome)
     assert nomes_tools(mcp) == {"usa_helper"}
 
 
-def test_oficial_vence_custom_de_mesmo_nome(pacote, custom):
+@pytest.mark.parametrize("habilitada", [True, False])
+def test_custom_nunca_substitui_oficial(pacote, custom, habilitada):
     pacote("dup", PLUGIN_OK.format(tool="da_oficial"))
     custom("dup", PLUGIN_OK.format(tool="da_custom"))
     mcp = FastMCP("t")
-    inv = carregar(mcp, ["dup"], pacote=pacote.nome, custom=custom.dir, pacote_custom=custom.nome)
-    assert nomes_tools(mcp) == {"da_oficial"}
-    assert inv["ignoradas"] == {"custom/dup": "mesmo nome de uma tool oficial"}
+    inv = carregar(mcp, ["dup"] if habilitada else [], pacote=pacote.nome,
+                   custom=custom.dir, pacote_custom=custom.nome)
+    assert nomes_tools(mcp) == ({"da_oficial"} if habilitada else set())
+    assert inv["ignoradas"]["custom/dup"] == "mesmo nome de uma tool oficial"
     assert f"{custom.nome}.dup" not in sys.modules
 
 
@@ -197,7 +221,7 @@ def test_colisao_entre_oficial_e_custom_levanta(pacote, custom):
     pacote("um", PLUGIN_OK.format(tool="repetida"))
     custom("dois", PLUGIN_OK.format(tool="repetida"))
     with pytest.raises(ColisaoDeTools, match=r"'repetida'.*\.um.*custom_teste_\d+\.dois"):
-        carregar(FastMCP("t"), ["um", "dois"], pacote=pacote.nome,
+        carregar(FastMCP("t"), ["um"], pacote=pacote.nome,
                  custom=custom.dir, pacote_custom=custom.nome)
 
 
@@ -205,7 +229,7 @@ def test_custom_quebrada_nao_derruba_oficiais(pacote, custom):
     pacote("bom", PLUGIN_OK.format(tool="tool_boa"))
     custom("ruim", "raise RuntimeError('quebrei')\n")
     mcp = FastMCP("t")
-    inv = carregar(mcp, ["bom", "ruim"], pacote=pacote.nome,
+    inv = carregar(mcp, ["bom"], pacote=pacote.nome,
                    custom=custom.dir, pacote_custom=custom.nome)
     assert nomes_tools(mcp) == {"tool_boa"}
     assert inv["ignoradas"]["custom/ruim"] == "erro de import: RuntimeError: quebrei"
@@ -224,7 +248,21 @@ def test_diretorio_custom_env(tmp_path):
     assert tools.diretorio_custom({}) == tools.RAIZ / "custom_tools"
 
 
-def test_exemplo_custom_do_repo_carrega():
+def test_helper_com_underline_nunca_sobe(custom):
+    custom("_exemplo", PLUGIN_OK.format(tool="nao_devia"))
     mcp = FastMCP("t")
-    carregar(mcp, ["tempo", "eco"], custom=tools.diretorio_custom({}))
-    assert nomes_tools(mcp) == {"data_hora", "eco"}
+    inv = carregar(mcp, ["tempo"], custom=custom.dir, pacote_custom=custom.nome)
+    assert nomes_tools(mcp) == {"data_hora"}
+    assert inv["ignoradas"] == {"calculo": "não habilitada", "feriados": "não habilitada",
+                                "sistema": "não habilitada"}
+
+
+def test_exemplo_versionado_funciona(custom):
+    """exemplos/custom_tools/exemplo.py copiado para o volume sobe e responde."""
+    custom("exemplo", (tools.RAIZ / "exemplos" / "custom_tools" / "exemplo.py").read_text())
+    mcp = FastMCP("t")
+    inv = carregar(mcp, [], pacote="tools", custom=custom.dir, pacote_custom=custom.nome)
+    assert inv["ativas"] == {"custom/exemplo": ["eco"]}
+    r = asyncio.run(mcp.call_tool("eco", {"texto": "  olá   dobi "}))
+    conteudo = r[0] if isinstance(r, tuple) else r
+    assert '"eco": "olá dobi"' in conteudo[0].text

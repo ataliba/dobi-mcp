@@ -7,4 +7,5 @@ venv/
 .env.*
 .git/
 run.sh
+/custom_tools/
 build.sh
