@@ -75,7 +75,7 @@ ao robô "quanto é 2 elevado a 10?" ou "como está o servidor?".
 Só as variáveis definidas viram flags (`--env`, `--projectId`, `--path`, `--domain`). No boot sai
 `segredos via Infisical (env=..., sessão Universal Auth)` em stderr.
 
-**Sessão Universal Auth**: com client-id/secret no ambiente, o
+**Sessão Universal Auth** (mesmo modelo do [velhodorio](#origem)): com client-id/secret no ambiente, o
 `pipe.py` roda `infisical login --method=universal-auth --silent --plain` a cada boot, pega o
 token de acesso de curta duração e só então faz `infisical run` com ele. Nada de token fixo
 vencendo no `.env`: reiniciou, sessão nova. Client-id/secret chegam ao CLI pelo ambiente (não
@@ -228,3 +228,14 @@ Sem rede: inclui um teste de ponta a ponta com WebSocket fake em 127.0.0.1
 - Plugin é código Python com os mesmos privilégios do servidor: revise antes de habilitar.
 - Log sempre em stderr; stdout é exclusivo do protocolo MCP.
 - `mcp<2` fixado: o SDK 2.x renomeou `FastMCP` para `MCPServer`.
+
+## Origem
+
+Velhodorio e Neuroaion, citados neste repositório e no histórico de commits, são ferramentas
+minhas que uso no dia a dia:
+
+- **velhodorio**: meu assistente pessoal multiagente. Serviu de base para algumas
+  funcionalidades daqui, como o login Universal Auth no Infisical com token de sessão a cada
+  boot (`pipe.py`).
+- **Neuroaion**: meu sistema de tarefas e energia, que expõe um servidor MCP. Uso com o dobi
+  como tool personalizada local (`custom_tools/`), por isso não está neste repositório.
