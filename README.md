@@ -18,6 +18,7 @@ Nuvem XiaoZhi (wss) <──> pipe.py (ponte) <──stdio──> server.py (Fast
 | `status_servidor` | CPU, memória, disco e uptime do host |
 | `proximos_feriados` | Próximos feriados nacionais/estaduais ([feriadosapi.com](https://feriadosapi.com)) |
 | `dia_util_bancario` | Se a data é dia útil bancário e o próximo dia útil |
+| `clima` | Tempo agora e previsão de até 7 dias por cidade ([Open-Meteo](https://open-meteo.com), sem API key) |
 
 Personalizadas: o que estiver em `custom_tools/` (local, fora do git; veja abaixo).
 
@@ -35,6 +36,8 @@ python pipe.py server.py
 Feriados: crie conta free em feriadosapi.com, gere token no dashboard e exporte
 `FERIADOS_API_KEY` (opcional `FERIADOS_UF=SP` como estado padrão).
 
+Clima: Open-Meteo é grátis e não precisa de chave; `CLIMA_CIDADE=Campinas` define a cidade padrão (opcional).
+
 Ou em container (non-root, uid 10001). Tools oficiais vêm na imagem; as personalizadas
 entram por volume read-only em `/app/custom_tools`:
 
@@ -43,7 +46,7 @@ docker compose up -d --build          # usa docker-compose.yml de exemplo
 # ou, sem compose:
 docker build -t dobi-mcp .
 docker run -d --name dobi-mcp --restart unless-stopped --env-file .env \
-  -e ENABLED_TOOLS=calculo,tempo,sistema,feriados \
+  -e ENABLED_TOOLS=calculo,tempo,sistema,feriados,clima \
   -v "$PWD/custom_tools:/app/custom_tools:ro" dobi-mcp
 ```
 
@@ -51,7 +54,7 @@ Os arquivos de `custom_tools/` precisam ser legíveis pelo uid 10001 (`chmod o+r
 Mudou uma tool oficial? Rebuild da imagem. Mudou uma personalizada? Só reinicie o container.
 
 Sucesso = log `conectado em wss://api.xiaozhi.me/mcp/?token=***`. Depois pergunte
-ao robô "quanto é 2 elevado a 10?" ou "como está o servidor?".
+ao robô "quanto é 2 elevado a 10?", "como está o servidor?" ou "vai chover amanhã em Campinas?".
 
 ## Segredos via Infisical (opcional)
 
@@ -110,7 +113,7 @@ USE_INFISICAL=1 docker compose up -d --build
 docker build -t dobi-mcp .
 docker run -d --name dobi-mcp --restart unless-stopped --env-file .env \
   -e USE_INFISICAL=1 -e INFISICAL_ENV=prod \
-  -e ENABLED_TOOLS=calculo,tempo,sistema,feriados \
+  -e ENABLED_TOOLS=calculo,tempo,sistema,feriados,clima \
   -v "$PWD/custom_tools:/app/custom_tools:ro" dobi-mcp
 ```
 
@@ -207,6 +210,7 @@ Regras:
 ## Testes
 
 ```bash
+python -m venv venv && . venv/bin/activate   # isola as dependências (simpleeval, mcp...)
 pip install -r requirements-dev.txt
 pytest -q
 ```

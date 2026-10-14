@@ -6,3 +6,4 @@ enabled_tools:
   - tempo
   - sistema
   - feriados
+  - clima
