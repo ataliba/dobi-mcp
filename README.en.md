@@ -19,6 +19,7 @@ XiaoZhi cloud (wss) <──> pipe.py (bridge) <──stdio──> server.py (Fas
 | `proximos_feriados` | Upcoming national/state holidays in Brazil ([feriadosapi.com](https://feriadosapi.com)) |
 | `dia_util_bancario` | Whether a date is a Brazilian banking business day, and the next one |
 | `clima` | Current weather and up to 7-day forecast by city ([Open-Meteo](https://open-meteo.com), no API key) |
+| `busca_web` | Web search: [Brave Search](https://brave.com/search/api/) with a key, otherwise DuckDuckGo |
 
 Tool names and replies are in Portuguese: they are spoken by the robot.
 
@@ -40,6 +41,9 @@ Holidays: create a free account at feriadosapi.com, generate a token in the dash
 
 Weather: Open-Meteo is free and needs no key; `CLIMA_CIDADE=Campinas` sets the default city (optional).
 
+Web search: with `BRAVE_API_KEY` (free plan at brave.com/search/api) it uses Brave Search; without
+the key, or if Brave fails (quota, network), it falls back to DuckDuckGo, which needs no key.
+
 Or in a container (non-root, uid 10001). Official tools ship inside the image; custom tools
 come in through a read-only volume at `/app/custom_tools`:
 
@@ -48,7 +52,7 @@ docker compose up -d --build          # uses the sample docker-compose.yml
 # or, without compose:
 docker build -t dobi-mcp .
 docker run -d --name dobi-mcp --restart unless-stopped --env-file .env \
-  -e ENABLED_TOOLS=calculo,tempo,sistema,feriados,clima \
+  -e ENABLED_TOOLS=calculo,tempo,sistema,feriados,clima,busca_web \
   -v "$PWD/custom_tools:/app/custom_tools:ro" dobi-mcp
 ```
 
@@ -61,7 +65,7 @@ Success = log line `conectado em wss://api.xiaozhi.me/mcp/?token=***`. Then ask 
 ## Secrets via Infisical (optional)
 
 `USE_INFISICAL` turns [Infisical](https://infisical.com) on/off as the secrets source
-(`MCP_ENDPOINT`, `FERIADOS_API_KEY`, `FERIADOS_UF`):
+(`MCP_ENDPOINT`, `FERIADOS_API_KEY`, `FERIADOS_UF`, `BRAVE_API_KEY`):
 
 - **Off** (default: unset or `0`): secrets come from the environment/`.env`, as above.
 - **On** (`1`, `true`, `yes`, `on` or `sim`): `pipe.py` re-executes itself under
@@ -114,7 +118,7 @@ USE_INFISICAL=1 docker compose up -d --build
 docker build -t dobi-mcp .
 docker run -d --name dobi-mcp --restart unless-stopped --env-file .env \
   -e USE_INFISICAL=1 -e INFISICAL_ENV=prod \
-  -e ENABLED_TOOLS=calculo,tempo,sistema,feriados,clima \
+  -e ENABLED_TOOLS=calculo,tempo,sistema,feriados,clima,busca_web \
   -v "$PWD/custom_tools:/app/custom_tools:ro" dobi-mcp
 ```
 
