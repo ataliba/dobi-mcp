@@ -1,4 +1,5 @@
 """Busca na web: Brave Search API se houver BRAVE_API_KEY; senão (ou se falhar) DuckDuckGo (ddgs)."""
+import html
 import logging
 import os
 import re
@@ -19,8 +20,8 @@ _TAGS = re.compile(r"<[^>]+>")
 
 
 def _limpar(texto: str | None) -> str:
-    """Brave marca os termos com <strong>; o robô fala o texto, então só o texto puro."""
-    return _TAGS.sub("", texto or "").strip()
+    """Brave marca os termos com <strong> e escapa entidades (&gt;); o robô fala o texto puro."""
+    return html.unescape(_TAGS.sub("", texto or "")).strip()
 
 
 def _brave(consulta: str, n: int) -> list[dict]:

@@ -11,7 +11,7 @@ from tools import busca_web as mod
 
 BRAVE = {"web": {"results": [
     {"title": "Taxa <strong>Selic</strong>", "url": "https://bcb.gov.br/selic",
-     "description": "A <strong>Selic</strong> é a taxa básica de juros."},
+     "description": "A <strong>Selic</strong> &gt; taxa básica de juros."},
     {"title": "Copom", "url": "https://bcb.gov.br/copom", "description": None},
 ]}}
 DDG = [{"title": "Selic hoje", "href": "https://exemplo.com/selic", "body": "Taxa atual."}]
@@ -73,7 +73,7 @@ def test_brave_com_chave_limpa_html(falsos):
     assert r["ok"] and r["fonte"] == "brave"
     assert r["resultados"] == [
         {"titulo": "Taxa Selic", "url": "https://bcb.gov.br/selic",
-         "resumo": "A Selic é a taxa básica de juros."},
+         "resumo": "A Selic > taxa básica de juros."},
         {"titulo": "Copom", "url": "https://bcb.gov.br/copom", "resumo": ""},
     ]
     _, headers, params = falsos.chamadas[0]
