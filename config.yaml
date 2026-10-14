@@ -7,3 +7,4 @@ enabled_tools:
   - sistema
   - feriados
   - clima
+  - busca_web
