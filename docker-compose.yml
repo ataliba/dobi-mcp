@@ -9,7 +9,7 @@ services:
     environment:
       # Oficiais (tools/, dentro da imagem) ativas; sobrepõe config.yaml.
       # Personalizadas (custom_tools/) sobem todas, só por estarem no volume.
-      ENABLED_TOOLS: calculo,tempo,sistema,feriados
+      ENABLED_TOOLS: calculo,tempo,sistema,feriados,clima
       # Infisical: 1 = segredos vêm do Infisical; 0/ausente = só .env.
       # Com 1, defina no .env: INFISICAL_UNIVERSAL_AUTH_CLIENT_ID/SECRET (machine identity),
       # INFISICAL_PROJECT_ID e, se instância própria, INFISICAL_API_URL.

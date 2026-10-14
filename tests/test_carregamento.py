@@ -253,7 +253,8 @@ def test_helper_com_underline_nunca_sobe(custom):
     mcp = FastMCP("t")
     inv = carregar(mcp, ["tempo"], custom=custom.dir, pacote_custom=custom.nome)
     assert nomes_tools(mcp) == {"data_hora"}
-    assert inv["ignoradas"] == {"calculo": "não habilitada", "feriados": "não habilitada",
+    assert inv["ignoradas"] == {"calculo": "não habilitada", "clima": "não habilitada",
+                                "feriados": "não habilitada",
                                 "sistema": "não habilitada"}
 
 
