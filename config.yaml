@@ -1,5 +1,6 @@
 # Tools OFICIAIS ativas quando ENABLED_TOOLS (env) não está definida.
 # Cada nome = um arquivo tools/<nome>.py com register(mcp). Fora da lista = não importado.
+# Opcionais, fora da lista por padrão: finlynq (precisa de FINLYNQ_URL/FINLYNQ_TOKEN).
 # Personalizadas (custom_tools/) não entram aqui: estar no diretório já ativa.
 enabled_tools:
   - calculo

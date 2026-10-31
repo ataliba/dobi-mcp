@@ -2,8 +2,8 @@
 
 [Português](README.md) | **English**
 
-Minimal MCP server for **XiaoZhi** agents (e.g. the Dobi robot). Exposes read-only tools
-and connects to the XiaoZhi cloud through an **outbound** WebSocket — no open ports on your side.
+Minimal MCP server for **XiaoZhi** agents (e.g. the Dobi robot). Exposes mostly read-only
+tools (the ones that write ask for confirmation) and connects to the XiaoZhi cloud through an **outbound** WebSocket — no open ports on your side.
 
 ```
 XiaoZhi cloud (wss) <──> pipe.py (bridge) <──stdio──> server.py (FastMCP)
@@ -20,6 +20,7 @@ XiaoZhi cloud (wss) <──> pipe.py (bridge) <──stdio──> server.py (Fas
 | `dia_util_bancario` | Whether a date is a Brazilian banking business day, and the next one |
 | `clima` | Current weather and up to 7-day forecast by city ([Open-Meteo](https://open-meteo.com), no API key) |
 | `busca_web` | Web search: [Brave Search](https://brave.com/search/api/) with a key, otherwise DuckDuckGo |
+| `finlynq_*` | Personal finance on a self-hosted [Finlynq](https://github.com/finlynq/finlynq): balances, net worth, categories, search, recording and deleting transactions (opt-in) |
 
 Tool names and replies are in Portuguese: they are spoken by the robot.
 
@@ -43,6 +44,12 @@ Weather: Open-Meteo is free and needs no key; `CLIMA_CIDADE=Campinas` sets the d
 
 Web search: with `BRAVE_API_KEY` (free plan at brave.com/search/api) it uses Brave Search; without
 the key, or if Brave fails (quota, network), it falls back to DuckDuckGo, which needs no key.
+
+Finlynq: left out of the default `config.yaml` (it needs your own server and writes data); enable
+it with `ENABLED_TOOLS=...,finlynq`. Set `FINLYNQ_URL=http://<host>:3000/api/mcp` (`/mcp` is a
+308 redirect) and `FINLYNQ_TOKEN` to a `pf_*` API key (Settings → API Keys). Recording and
+deleting transactions only write with `confirmar=true`: before that, recording runs as `dryRun`
+and deleting only shows what it would delete.
 
 Or in a container (non-root, uid 10001). Official tools ship inside the image; custom tools
 come in through a read-only volume at `/app/custom_tools`:
