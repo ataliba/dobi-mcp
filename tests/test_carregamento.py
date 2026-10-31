@@ -255,6 +255,7 @@ def test_helper_com_underline_nunca_sobe(custom):
     assert nomes_tools(mcp) == {"data_hora"}
     assert inv["ignoradas"] == {"busca_web": "não habilitada", "calculo": "não habilitada",
                                 "clima": "não habilitada",
+                                "finlynq": "não habilitada",
                                 "feriados": "não habilitada",
                                 "sistema": "não habilitada"}
 

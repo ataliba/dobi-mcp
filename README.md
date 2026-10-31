@@ -2,8 +2,8 @@
 
 **Português** | [English](README.en.md)
 
-MCP mínimo para agentes **XiaoZhi** (ex.: robô Dobi). Expõe tools somente leitura
-e conecta na nuvem XiaoZhi por WebSocket de **saída** — nenhuma porta aberta no seu lado.
+MCP mínimo para agentes **XiaoZhi** (ex.: robô Dobi). Expõe tools quase todas
+somente leitura (as que gravam pedem confirmação) e conecta na nuvem XiaoZhi por WebSocket de **saída** — nenhuma porta aberta no seu lado.
 
 ```
 Nuvem XiaoZhi (wss) <──> pipe.py (ponte) <──stdio──> server.py (FastMCP)
@@ -20,6 +20,7 @@ Nuvem XiaoZhi (wss) <──> pipe.py (ponte) <──stdio──> server.py (Fast
 | `dia_util_bancario` | Se a data é dia útil bancário e o próximo dia útil |
 | `clima` | Tempo agora e previsão de até 7 dias por cidade ([Open-Meteo](https://open-meteo.com), sem API key) |
 | `busca_web` | Pesquisa na internet: [Brave Search](https://brave.com/search/api/) com chave, senão DuckDuckGo |
+| `finlynq_*` | Finanças pessoais no [Finlynq](https://github.com/finlynq/finlynq) self-hosted: saldos, patrimônio, categorias, busca, registro e remoção de transação (opt-in) |
 
 Personalizadas: o que estiver em `custom_tools/` (local, fora do git; veja abaixo).
 
@@ -41,6 +42,12 @@ Clima: Open-Meteo é grátis e não precisa de chave; `CLIMA_CIDADE=Campinas` de
 
 Busca web: com `BRAVE_API_KEY` (plano free em brave.com/search/api) usa o Brave Search; sem a
 chave, ou se o Brave falhar (cota, rede), cai para o DuckDuckGo, que dispensa chave.
+
+Finlynq: fora do `config.yaml` padrão (precisa do seu servidor e grava dados); ative com
+`ENABLED_TOOLS=...,finlynq`. Defina `FINLYNQ_URL=http://<host>:3000/api/mcp` (o `/mcp` é
+redirect 308) e `FINLYNQ_TOKEN` com uma API key `pf_*` (Settings → API Keys). Registrar e
+apagar transação só gravam com `confirmar=true`: antes disso registrar roda em `dryRun` e
+apagar só mostra o que apagaria.
 
 Ou em container (non-root, uid 10001). Tools oficiais vêm na imagem; as personalizadas
 entram por volume read-only em `/app/custom_tools`:
