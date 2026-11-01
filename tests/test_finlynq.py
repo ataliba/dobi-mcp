@@ -3,6 +3,7 @@ import asyncio
 import json
 from types import SimpleNamespace
 
+import httpx
 import pytest
 from mcp.server.fastmcp import FastMCP
 
@@ -196,3 +197,28 @@ def test_interpreta_resultado_remoto(monkeypatch, resultado, esperado):
     monkeypatch.setattr(mod, "streamablehttp_client", Cliente)
     monkeypatch.setattr(mod, "ClientSession", Sessao)
     assert asyncio.run(mod._chamar("u", "t", "x", {})) == esperado
+
+
+def _erro_http(status: int) -> httpx.HTTPStatusError:
+    req = httpx.Request("POST", "https://x/api/mcp", headers={"Authorization": "Bearer pf_teste"})
+    return httpx.HTTPStatusError("erro pf_teste", request=req, response=httpx.Response(status, request=req))
+
+
+@pytest.mark.parametrize("erro,motivo", [
+    (lambda: ExceptionGroup("g", [_erro_http(503)]), "HTTP 503"),
+    (lambda: ExceptionGroup("g", [ExceptionGroup("h", [_erro_http(401)])]), "HTTP 401"),
+    (lambda: ExceptionGroup("g", [ValueError("x"), _erro_http(500)]), "HTTP 500"),
+    (lambda: ExceptionGroup("g", [ConnectionError("pf_teste")]), "ConnectionError"),
+    (lambda: _erro_http(502), "HTTP 502"),
+])
+def test_grupo_de_excecoes_revela_causa_sem_vazar_token(fin, monkeypatch, caplog, erro, motivo):
+    mcp, *_ = fin
+
+    async def explode(url, token, tool, args):
+        raise erro()
+
+    monkeypatch.setattr(mod, "_chamar", explode)
+    r = chamar(mcp, "finlynq_saldos")
+    assert r == {"erro": f"Finlynq indisponível ({motivo})"}
+    assert motivo in caplog.text
+    assert "pf_teste" not in caplog.text and "pf_teste" not in r["erro"]
