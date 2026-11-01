@@ -66,8 +66,13 @@ docker run -d --name dobi-mcp --restart unless-stopped --env-file .env \
 Files in `custom_tools/` must be readable by uid 10001 (`chmod o+r custom_tools/*.py`).
 Changed an official tool? Rebuild the image. Changed a custom one? Just restart the container.
 
-Success = log line `conectado em wss://api.xiaozhi.me/mcp/?token=***`. Then ask the robot
+Success = log line `conectado em wss://api.xiaozhi.me/mcp/?token=*** (agente 123456)`. Then ask the robot
 "quanto é 2 elevado a 10?", "como está o servidor?" or "vai chover amanhã em Campinas?".
+
+Several robots, one container per robot: each with its own `MCP_ENDPOINT`. The agent number
+in the log (read from the token, without exposing it) shows which robot each container serves:
+two containers with the same agent = swapped endpoint (e.g. wrong Infisical environment).
+`docker stop` closes the tunnel right away (WebSocket close frame) and the robot shows as disconnected.
 
 ## Secrets via Infisical (optional)
 

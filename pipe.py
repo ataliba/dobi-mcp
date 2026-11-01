@@ -5,17 +5,23 @@ Uso:  MCP_ENDPOINT='wss://api.xiaozhi.me/mcp/?token=...' python pipe.py server.p
 - Conexão é de saída (sem portas abertas no seu lado).
 - Reconecta com backoff exponencial + jitter.
 - O token nunca vai para o log.
+- SIGTERM/SIGINT (ex.: `docker stop`) fecham o WebSocket com close frame antes de sair;
+  sem isso, como PID 1 no container, o sinal seria ignorado e o túnel morreria no SIGKILL.
 - USE_INFISICAL=1 -> reexecuta sob `infisical run` (segredos injetados no ambiente).
   Com INFISICAL_UNIVERSAL_AUTH_CLIENT_ID/SECRET (machine identity), faz antes o login
   Universal Auth e usa o token de sessão gerado a cada boot (não vence parado no .env).
 """
 import asyncio
+import base64
+import json
 import logging
 import os
 import random
 import shutil
+import signal
 import subprocess
 import sys
+from urllib.parse import parse_qs, urlsplit
 
 import websockets
 
@@ -80,10 +86,26 @@ def mascarar(url: str) -> str:
     return url.split("?")[0] + "?token=***" if "?" in url else url
 
 
+def agente_do_token(url: str) -> str | None:
+    """agentId do payload do JWT do endpoint (não é segredo; sem validar assinatura).
+
+    Serve só para o log: dois containers com o mesmo agente ficam evidentes.
+    """
+    try:
+        token = parse_qs(urlsplit(url).query)["token"][0]
+        payload = token.split(".")[1]
+        dados = json.loads(base64.urlsafe_b64decode(payload + "=" * (-len(payload) % 4)))
+        agente = dados.get("agentId") or dados.get("endpointId")
+        return str(agente) if agente else None
+    except (KeyError, IndexError, ValueError, TypeError, AttributeError):
+        return None
+
+
 async def sessao(endpoint: str, script: str) -> None:
     async with websockets.connect(endpoint, ping_interval=20, ping_timeout=20,
-                                  max_size=2**20) as ws:
-        log.info("conectado em %s", mascarar(endpoint))
+                                  close_timeout=5, max_size=2**20) as ws:
+        agente = agente_do_token(endpoint)
+        log.info("conectado em %s%s", mascarar(endpoint), f" (agente {agente})" if agente else "")
         proc = await asyncio.create_subprocess_exec(
             sys.executable, script,
             stdin=asyncio.subprocess.PIPE, stdout=asyncio.subprocess.PIPE,
@@ -108,6 +130,13 @@ async def sessao(endpoint: str, script: str) -> None:
             for t in done:
                 if t.exception():
                     raise t.exception()
+            if ws.close_code is not None:
+                log.info("WebSocket fechado pelo servidor (código %s%s)", ws.close_code,
+                         f": {ws.close_reason}" if ws.close_reason else "")
+        except asyncio.CancelledError:
+            # 1001 "going away"; sem isso o `async with` fecharia com 1011 (erro interno)
+            await ws.close(1001, "pipe encerrando")
+            raise
         finally:
             for t in tarefas:
                 t.cancel()
@@ -145,18 +174,34 @@ async def main() -> None:
     if not endpoint or len(sys.argv) != 2:
         sys.exit("uso: MCP_ENDPOINT='wss://...' python pipe.py server.py")
     script = sys.argv[1]
+    instalar_sinais(asyncio.current_task())
     backoff = BACKOFF_INICIAL
-    while True:
-        try:
-            await sessao(endpoint, script)
-            backoff = BACKOFF_INICIAL
-            log.info("sessão encerrada, reconectando")
-        except Exception as e:  # noqa: BLE001
-            log.warning("falha: %s: %s", type(e).__name__, str(e)[:200])
-        espera = min(backoff, BACKOFF_MAX) + random.uniform(0, 1)
-        log.info("nova tentativa em %.1fs", espera)
-        await asyncio.sleep(espera)
-        backoff *= 2
+    try:
+        while True:
+            try:
+                await sessao(endpoint, script)
+                backoff = BACKOFF_INICIAL
+                log.info("sessão encerrada, reconectando")
+            except Exception as e:  # noqa: BLE001
+                log.warning("falha: %s: %s", type(e).__name__, str(e)[:200])
+            espera = min(backoff, BACKOFF_MAX) + random.uniform(0, 1)
+            log.info("nova tentativa em %.1fs", espera)
+            await asyncio.sleep(espera)
+            backoff *= 2
+    except asyncio.CancelledError:
+        # o `async with` da sessão já mandou o close frame e o server.py foi terminado
+        log.info("encerrado por sinal")
+
+
+def instalar_sinais(tarefa: asyncio.Task) -> None:
+    """SIGTERM/SIGINT cancelam a tarefa principal: a sessão sai pelo `async with`/`finally`,
+    fechando o WebSocket (close frame) e terminando o server.py."""
+    loop = asyncio.get_running_loop()
+    for sig in (signal.SIGTERM, signal.SIGINT):
+        def ao_receber(s=sig):
+            log.info("recebido %s, fechando túnel", signal.Signals(s).name)
+            tarefa.cancel()
+        loop.add_signal_handler(sig, ao_receber)
 
 
 if __name__ == "__main__":
