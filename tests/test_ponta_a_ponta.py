@@ -67,3 +67,43 @@ def test_initialize_list_call_via_pipe():
 
     assert "tools ativas (2): calculo, tempo" in stderr
     assert "segredo" not in stderr  # token mascarado no log
+
+
+async def _sigterm() -> tuple[int | None, int, str]:
+    """Pipe conectado recebe SIGTERM (como no `docker stop`): deve mandar close frame e sair."""
+    conectou, fechou = asyncio.Event(), asyncio.Event()
+    codigo: dict = {}
+
+    async def handler(ws):
+        conectou.set()
+        try:
+            await ws.wait_closed()
+        finally:
+            codigo["close"] = ws.close_code
+            fechou.set()
+
+    async with serve(handler, "127.0.0.1", 0) as servidor:
+        porta = servidor.sockets[0].getsockname()[1]
+        env = {**os.environ, "MCP_ENDPOINT": f"ws://127.0.0.1:{porta}/mcp/?token=segredo",
+               "ENABLED_TOOLS": "calculo"}
+        proc = await asyncio.create_subprocess_exec(
+            sys.executable, str(RAIZ / "pipe.py"), str(RAIZ / "server.py"),
+            env=env, cwd=RAIZ, stderr=subprocess.PIPE, stdout=subprocess.PIPE)
+        try:
+            await asyncio.wait_for(conectou.wait(), TIMEOUT)
+            await asyncio.sleep(0.5)  # deixa o handler de sinal ser instalado e o server.py subir
+            proc.terminate()
+            await asyncio.wait_for(fechou.wait(), 10)
+            _, err = await asyncio.wait_for(proc.communicate(), 10)
+        finally:
+            if proc.returncode is None:
+                proc.kill()
+    return codigo.get("close"), proc.returncode, err.decode()
+
+
+def test_sigterm_fecha_websocket_com_close_frame():
+    close, rc, stderr = asyncio.run(_sigterm())
+    assert close == 1001, stderr  # "going away" limpo; não 1006 (caiu) nem 1011 (erro)
+    assert rc == 0, stderr
+    assert "recebido SIGTERM, fechando túnel" in stderr
+    assert "encerrado por sinal" in stderr
