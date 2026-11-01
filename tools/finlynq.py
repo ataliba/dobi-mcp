@@ -17,6 +17,7 @@ import os
 import re
 from datetime import date
 
+import httpx
 from mcp import ClientSession
 from mcp.client.streamable_http import streamablehttp_client
 from mcp.server.fastmcp import FastMCP
@@ -130,6 +131,22 @@ def _categorias(dados) -> dict:
     return {"categorias": itens}
 
 
+def _causas(exc: BaseException) -> list[BaseException]:
+    """Abre ExceptionGroup (o cliente MCP usa task group do anyio) até as causas reais."""
+    if isinstance(exc, BaseExceptionGroup):
+        return [c for e in exc.exceptions for c in _causas(e)]
+    return [exc]
+
+
+def _motivo(exc: BaseException) -> str:
+    """Motivo curto e seguro: só status HTTP ou nome da classe, nunca o texto da exceção."""
+    causas = _causas(exc)
+    for c in causas:
+        if isinstance(c, httpx.HTTPStatusError):
+            return f"HTTP {c.response.status_code}"
+    return type(causas[0]).__name__
+
+
 async def _chamar(url: str, token: str, tool: str, args: dict):
     """Uma chamada = uma sessão. Devolve o `data` do envelope do Finlynq ou {"erro": ...}."""
     headers = {"Authorization": f"Bearer {token}"}
@@ -167,8 +184,9 @@ def register(mcp: FastMCP) -> None:
         try:
             dados = await _chamar(url, token, tool, args)
         except Exception as e:  # noqa: BLE001
-            log.warning("finlynq %s falhou: %s", tool, type(e).__name__)
-            return {"erro": f"Finlynq indisponível ({type(e).__name__})"}
+            motivo = _motivo(e)
+            log.warning("finlynq %s falhou: %s", tool, motivo)
+            return {"erro": f"Finlynq indisponível ({motivo})"}
         if isinstance(dados, dict) and "erro" in dados:
             return dados
         if formatar:
